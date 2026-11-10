@@ -1,0 +1,41 @@
+# OpenSkimmer local settings. Copy to skimmer.local.conf and edit:
+#
+#     cp skimmer.local.conf.example skimmer.local.conf
+#
+# start_skimmer.sh sources this file as shell, so values are shell
+# variables. skimmer.local.conf is gitignored because it may hold a KiwiSDR
+# password. The full list of settings is at the top of start_skimmer.sh.
+
+# --- Station (shown in the Telnet banner and on every spot) ---------------
+MY_CALL="N0CALL"
+OP_NAME=""                 # optional
+GRID=""                    # optional, e.g. FN31pr
+QTH=""                     # optional, e.g. "Newington, CT - USA"
+
+# --- Bands -----------------------------------------------------------------
+# One --band spec per band: source[@host]:center_hz[/span_hz]. Sources can
+# be mixed; each band gets its own waterfall on port 7380, 7381, ...
+#
+# Hermes-Lite 2 (up to 4 bands from one radio; all the same span):
+#BANDS="hl2@192.0.2.10:14030000/192000 hl2@192.0.2.10:7030000/192000"
+#
+# KiwiSDR (span in 12 kHz slices, max 96 kHz):
+#BANDS="kiwi@kiwisdr.local:14030000/24000"
+#KIWI_PASSWORD=""          # needed for more than the password-less slices
+#
+# SDRplay / RTL-SDR / Airspy via SoapySDR (use @serial to pick a device):
+#BANDS="sdrplay:14030000/192000"
+#PPM=""                    # clock correction, see tools/measure_ppm.py
+#GAIN=""                   # manual gain; unset = AGC
+#
+# ka9q-radio radiod channels (multicast group : channel centre / rate):
+#BANDS="ka9q@skimmer-iq.local:7030000/192000 ka9q@skimmer-iq.local:14030000/192000"
+
+# --- Decoding --------------------------------------------------------------
+#DECODER="hmm"             # hmm (default) or classical
+#MAX_WPM=50                # never spot a signal decoded faster than this
+#BLOCK=""                  # calls never to spot (e.g. a local noise source's)
+
+# --- Diagnostics (both logs grow without limit; see deploy/) -------------
+#LOG_CHANNELS="log-channels.txt"   # every decoded word
+#LOG_CHARS="log-chars.txt"         # every character with its timing

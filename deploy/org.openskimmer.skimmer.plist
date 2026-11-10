@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Run OpenSkimmer on macOS under launchd, instead of by hand in screen.
+
+  Install:
+      cp deploy/org.openskimmer.skimmer.plist ~/Library/LaunchAgents/
+      launchctl load -w ~/Library/LaunchAgents/org.openskimmer.skimmer.plist
+  Stop / start / status:
+      launchctl stop  org.openskimmer.skimmer
+      launchctl start org.openskimmer.skimmer
+      launchctl list | grep openskimmer
+  Remove:
+      launchctl unload -w ~/Library/LaunchAgents/org.openskimmer.skimmer.plist
+
+  EDIT THE PATHS BELOW: replace YOURUSER with your macOS user name
+  (run: whoami), and adjust if your checkout is not ~/openskimmer.
+  Bands, decoder and callsign are NOT set here -- start_skimmer.sh reads them
+  from skimmer.local.conf, which stays untracked because it holds the Kiwi
+  password. Change bands there, then `launchctl stop` + `start`.
+
+  Why an Agent and not a Daemon: this runs as you, in your login session, so
+  it can use your home directory, the venv and mDNS (.local names) exactly as
+  the manual screen session did. The cost is that it starts at LOGIN, not at
+  boot -- if the machine reboots unattended and nobody logs in, it will not
+  start. Enable automatic login, or convert to a LaunchDaemon in
+  /Library/LaunchDaemons (runs as root at boot; you must then set UserName,
+  and re-check that mDNS resolution and the venv paths still work).
+
+  KeepAlive restarts the skimmer if it exits for ANY reason. That is the
+  point: a hard crash of the parent used to leave its band children orphaned
+  and still subscribed to the multicast groups, silently, for days
+  (observed 2026-08-20). Under launchd the parent is replaced instead.
+  ThrottleInterval keeps a crash-loop to one attempt per 30 s.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.openskimmer.skimmer</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>/Users/YOURUSER/openskimmer/start_skimmer.sh</string>
+    </array>
+
+    <!-- start_skimmer.sh sources skimmer.local.conf and invokes
+         .venv/bin/openskimmer, both by relative path -->
+    <key>WorkingDirectory</key>
+    <string>/Users/YOURUSER/openskimmer</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Standard would let macOS throttle CPU and I/O when the machine looks
+         idle. This is a real-time DSP job that must never be napped. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <key>LowPriorityIO</key>
+    <false/>
+
+    <!-- launchd hands over a minimal environment; the script needs a usable
+         PATH for python and the venv shim -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- launchd APPENDS to these; they are never rotated, so trim them
+         occasionally or point them at a log rotation of your own -->
+    <key>StandardOutPath</key>
+    <string>/Users/YOURUSER/openskimmer/skimmer.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOURUSER/openskimmer/skimmer.log</string>
+</dict>
+</plist>

@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.DS_Store
+recordings/
+skimmer.local.conf
+MASTER.SCP
+# CW Skimmer's compiled callsign database, needed to replay a recording
+# through it for a side-by-side comparison. Third-party binary, ~1.3 MB.
+MASTER.DTA
+pota_activators.csv
+pota_activators.txt
+combined.txt
+log-channels.txt
+patt3ch.lst
+openskimmer-*.zip
+*.log
+*.pid
+mrx_spots.txt
+tmp/

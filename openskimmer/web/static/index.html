@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenSkimmer</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f24; --line: #2c313a;
+    --fg: #d6dae0; --dim: #8a93a0; --accent: #53b1fd; --spot: #ffd76a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; gap: 18px; align-items: baseline;
+    padding: 8px 14px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .info { color: var(--dim); }
+  header #freq-readout { color: var(--accent); min-width: 110px; }
+  header #status { margin-left: auto; color: var(--dim); }
+  header #status.ok { color: #6fdd8b; }
+  #layout { display: flex; gap: 0; }
+  #wf-pane { flex: 1 1 auto; min-width: 0; padding: 8px 0 8px 14px; }
+  #labels {
+    position: relative; height: 92px; overflow: hidden;
+    border-left: 1px solid var(--line);
+  }
+  #labels .lbl {
+    position: absolute; bottom: 2px; transform-origin: bottom left;
+    transform: rotate(-58deg); white-space: nowrap;
+    color: var(--spot); font: 12px ui-monospace, Menlo, monospace;
+    text-shadow: 0 0 3px #000;
+  }
+  #labels .lbl::before {
+    content: ""; position: absolute; left: -2px; bottom: -2px;
+    width: 4px; height: 4px; background: var(--spot); border-radius: 50%;
+  }
+  canvas { display: block; width: 100%; }
+  #wf { background: #000; image-rendering: pixelated; height: 55vh; }
+  #axis { height: 26px; }
+  #chan-pane {
+    flex: 0 0 460px; padding: 8px 14px; border-left: 1px solid var(--line);
+    max-height: calc(55vh + 130px); overflow-y: auto;
+  }
+  #chan-pane h2 { font-size: 12px; margin: 0 0 6px; color: var(--dim);
+                  text-transform: uppercase; letter-spacing: .06em; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 2px 8px 2px 0; vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; }
+  td.num { font: 12px ui-monospace, Menlo, monospace; white-space: nowrap; }
+  td.txt { font: 12px ui-monospace, Menlo, monospace; color: #b7e3c0;
+           word-break: break-all; }
+  #spots-pane { padding: 4px 14px 12px; }
+  #spots-pane h2 { font-size: 12px; margin: 8px 0 4px; color: var(--dim);
+                   text-transform: uppercase; letter-spacing: .06em; }
+  #spotlog { font: 12px ui-monospace, Menlo, monospace; white-space: pre;
+             color: var(--dim); max-height: 180px; overflow-y: auto; }
+  #spotlog .call { color: var(--spot); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenSkimmer</h1>
+  <span class="info" id="band-info">–</span>
+  <span id="freq-readout"></span>
+  <span id="status">connecting…</span>
+</header>
+<div id="layout">
+  <div id="wf-pane">
+    <div id="labels"></div>
+    <canvas id="wf"></canvas>
+    <canvas id="axis"></canvas>
+  </div>
+  <div id="chan-pane">
+    <h2>Active decoders</h2>
+    <table>
+      <thead><tr><th>kHz</th><th>WPM</th><th>dB</th><th>decoded</th></tr></thead>
+      <tbody id="chan-body"></tbody>
+    </table>
+  </div>
+</div>
+<div id="spots-pane">
+  <h2>Spots</h2>
+  <div id="spotlog"></div>
+</div>
+<script>
+"use strict";
+let cfg = null;
+const wf = document.getElementById("wf");
+const axis = document.getElementById("axis");
+const labelsEl = document.getElementById("labels");
+const LABEL_TTL_MS = 10 * 60 * 1000;
+let labels = [];   // {call, freq_hz, until}
+
+// colormap: black -> deep blue -> cyan -> yellow -> white
+const LUT = new Uint8ClampedArray(256 * 4);
+(function () {
+  const stops = [[0,[0,0,16]],[70,[0,0,160]],[140,[0,192,192]],
+                 [205,[255,255,0]],[255,[255,255,255]]];
+  for (let i = 0; i < 256; i++) {
+    let a = stops[0], b = stops[stops.length - 1];
+    for (let s = 0; s < stops.length - 1; s++)
+      if (i >= stops[s][0] && i <= stops[s + 1][0]) { a = stops[s]; b = stops[s + 1]; }
+    const t = (i - a[0]) / Math.max(1, b[0] - a[0]);
+    for (let c = 0; c < 3; c++) LUT[i * 4 + c] = a[1][c] + t * (b[1][c] - a[1][c]);
+    LUT[i * 4 + 3] = 255;
+  }
+})();
+
+function freqToX(hz, width) {
+  return (hz - cfg.center_hz + cfg.span_hz / 2) / cfg.span_hz * width;
+}
+
+function drawAxis() {
+  const ctx = axis.getContext("2d");
+  axis.width = axis.clientWidth * devicePixelRatio;
+  axis.height = 26 * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const w = axis.clientWidth;
+  ctx.fillStyle = "#1c1f24"; ctx.fillRect(0, 0, w, 26);
+  ctx.font = "11px ui-monospace, Menlo, monospace";
+  const lo = cfg.center_hz - cfg.span_hz / 2, hi = cfg.center_hz + cfg.span_hz / 2;
+  const step = cfg.span_hz > 150000 ? 10000 : cfg.span_hz > 40000 ? 5000 : 2000;
+  for (let f = Math.ceil(lo / 1000) * 1000; f <= hi; f += 1000) {
+    const x = freqToX(f, w);
+    const major = f % step === 0;
+    ctx.strokeStyle = major ? "#8a93a0" : "#3a404b";
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, major ? 8 : 5); ctx.stroke();
+    if (major) {
+      ctx.fillStyle = "#8a93a0";
+      ctx.textAlign = "center";
+      ctx.fillText((f / 1000).toFixed(0), x, 21);
+    }
+  }
+}
+
+function renderLabels() {
+  const now = Date.now();
+  labels = labels.filter(l => l.until > now);
+  labelsEl.innerHTML = "";
+  const w = labelsEl.clientWidth;
+  for (const l of labels.slice().sort((a, b) => a.freq_hz - b.freq_hz)) {
+    const div = document.createElement("div");
+    div.className = "lbl";
+    div.textContent = l.call;
+    div.style.left = freqToX(l.freq_hz, w).toFixed(1) + "px";
+    labelsEl.appendChild(div);
+  }
+}
+
+function addSpot(s) {
+  // one transmitter, one label: a new spot replaces whatever label sits at
+  // (or overlapping) this frequency, so garbled call variants can't stack
+  labels = labels.filter(l => Math.abs(l.freq_hz - s.freq_hz) > 150);
+  labels.push({call: s.call, freq_hz: s.freq_hz, until: Date.now() + LABEL_TTL_MS});
+  renderLabels();
+  const log = document.getElementById("spotlog");
+  const t = new Date(s.time * 1000).toISOString().slice(11, 16) + "Z";
+  const line = document.createElement("div");
+  line.innerHTML = `${t}  ${(s.freq_hz / 1000).toFixed(1).padStart(8)}  ` +
+    `<span class="call">${s.call.padEnd(12)}</span>` +
+    `${String(s.snr_db).padStart(3)} dB  ${String(s.wpm).padStart(2)} WPM  ${s.activity}`;
+  log.prepend(line);
+  while (log.childNodes.length > 200) log.removeChild(log.lastChild);
+}
+
+function updateChannels(chans) {
+  const body = document.getElementById("chan-body");
+  body.innerHTML = "";
+  for (const c of chans) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="num">${(c.freq_hz / 1000).toFixed(2)}</td>` +
+      `<td class="num">${c.wpm || ""}</td>` +
+      `<td class="num">${c.snr_db}</td>` +
+      `<td class="txt">${c.text.slice(-48)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+let rowImage = null;
+function drawRow(u8) {
+  const ctx = wf.getContext("2d");
+  if (!rowImage || rowImage.width !== wf.width)
+    rowImage = ctx.createImageData(wf.width, 1);
+  const px = rowImage.data;
+  for (let i = 0; i < wf.width; i++) {
+    const v = u8[Math.min(i, u8.length - 1)] * 4;
+    px[i * 4] = LUT[v]; px[i * 4 + 1] = LUT[v + 1];
+    px[i * 4 + 2] = LUT[v + 2]; px[i * 4 + 3] = 255;
+  }
+  ctx.drawImage(wf, 0, -1);           // scroll up: newest row at the bottom
+  ctx.putImageData(rowImage, 0, wf.height - 1);
+}
+
+wf.addEventListener("mousemove", e => {
+  if (!cfg) return;
+  const rect = wf.getBoundingClientRect();
+  const f = cfg.center_hz + (e.clientX - rect.left) / rect.width * cfg.span_hz
+            - cfg.span_hz / 2;
+  document.getElementById("freq-readout").textContent =
+    (f / 1000).toFixed(2) + " kHz";
+});
+wf.addEventListener("mouseleave", () => {
+  document.getElementById("freq-readout").textContent = "";
+});
+
+function connect() {
+  const status = document.getElementById("status");
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { status.textContent = "connected"; status.className = "ok"; };
+  ws.onclose = () => {
+    status.textContent = "disconnected — retrying…"; status.className = "";
+    setTimeout(connect, 2000);
+  };
+  ws.onmessage = ev => {
+    if (typeof ev.data === "string") {
+      const m = JSON.parse(ev.data);
+      if (m.type === "config") {
+        cfg = m;
+        wf.width = m.n_cols;
+        wf.height = 460;
+        document.getElementById("band-info").textContent =
+          `${(m.center_hz / 1e6).toFixed(3)} MHz ± ${(m.span_hz / 2000).toFixed(0)} kHz` +
+          `  ·  de ${m.my_call}`;
+        drawAxis();
+        document.title = `OpenSkimmer ${(m.center_hz / 1e6).toFixed(3)} MHz`;
+      } else if (m.type === "spot") addSpot(m);
+      else if (m.type === "channels") updateChannels(m.channels);
+    } else if (cfg) {
+      drawRow(new Uint8Array(ev.data));
+    }
+  };
+}
+window.addEventListener("resize", () => { if (cfg) { drawAxis(); renderLabels(); } });
+setInterval(renderLabels, 30000);
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openskimmer"
+version = "0.1.0"
+description = "Open source multi-channel CW skimmer with pluggable SDR backends"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Karl Heinz Kremer, K5KHK" }]
+keywords = ["ham radio", "amateur radio", "cw", "morse", "skimmer", "sdr", "rbn"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Ham Radio",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24",
+    "websocket-client>=1.6",
+    "aiohttp>=3.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/khkremer/OpenSkimmer"
+Issues = "https://github.com/khkremer/OpenSkimmer/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+openskimmer = "openskimmer.main:main"
+
+[tool.setuptools.packages.find]
+include = ["openskimmer*"]
+
+[tool.setuptools.package-data]
+"openskimmer.web" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

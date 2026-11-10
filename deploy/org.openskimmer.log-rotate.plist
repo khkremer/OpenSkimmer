@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Hourly size check for the launchd skimmer log; see rotate-skimmer-log.sh.
+  Replace YOURUSER below with your macOS user name before installing.
+-->
+<dict>
+    <key>Label</key>
+    <string>org.openskimmer.log-rotate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/YOURUSER/openskimmer/deploy/rotate-skimmer-log.sh</string>
+    </array>
+    <!-- Hourly. The check is a stat() and exits immediately below the
+         threshold, so this is far cheaper than letting the file reach
+         gigabytes between daily runs during a packet-loss episode. -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/YOURUSER/Library/Logs/openskimmer/rotate.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOURUSER/Library/Logs/openskimmer/rotate.log</string>
+</dict>
+</plist>

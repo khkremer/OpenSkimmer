@@ -1,0 +1,22 @@
+# systemd unit for OpenSkimmer.
+# REQUIRED EDITS before installing (or the service fails with 217/USER
+# or 203/EXEC): set User= to your Linux username (run: whoami) and
+# point WorkingDirectory=/ExecStart= at your unzip location. Then:
+#   sudo cp deploy/openskimmer.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now openskimmer
+
+[Unit]
+Description=OpenSkimmer multi-channel CW skimmer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOURUSER
+WorkingDirectory=/home/YOURUSER/openskimmer
+ExecStart=/home/YOURUSER/openskimmer/start_skimmer.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
