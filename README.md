@@ -161,7 +161,10 @@ Point `--band ka9q@GROUP:center/span` at the channel's data multicast group,
 either an mDNS name like `skimmer-iq.local` or a `239.x.x.x` address. The
 span must match the channel's sample rate in `radiod`. There is an example
 `radiod` config in `docs/radiod@skimmer-rtlsdr.conf`, and
-`tools/rtp_tap.py` shows what is in a stream:
+`tools/rtp_tap.py` shows what is in a stream. A channel set to
+`encoding = f32` in `radiod` needs `--rtp-encoding f32le`, and with `radiod`
+on the same host at `ttl = 0` (multicast kept off the LAN), add
+`--rtp-iface 127.0.0.1`:
 
 ```sh
 openskimmer --band ka9q@skimmer-iq.local:28050000/192000 --my-call YOURCALL

@@ -167,6 +167,15 @@ def build_parser() -> argparse.ArgumentParser:
                         "power out); off by default and forced off on connect")
     p.add_argument("--rtp-port", type=int, default=5004,
                    help="ka9q-radio RTP multicast port")
+    p.add_argument("--rtp-encoding", choices=["s16be", "f32le"], default="s16be",
+                   help="ka9q-radio IQ sample format: s16be (radiod's default) or "
+                        "f32le for a channel with `encoding = f32`. Must match "
+                        "radiod: read with the wrong one, the IQ is noise")
+    p.add_argument("--rtp-iface", default="0.0.0.0",
+                   help="local IPv4 address of the interface to join the ka9q "
+                        "multicast group on (default: the kernel's choice). "
+                        "127.0.0.1 when radiod runs on this host with ttl = 0, "
+                        "which keeps its multicast off the LAN")
     p.add_argument("--hl2-filters", choices=["n2adr", "none"],
                    default="n2adr",
                    help="HL2 companion filter board to drive (default "
@@ -273,7 +282,8 @@ def make_source(args, source_name: str, host, center: int, span: int):
         if not host:
             raise SystemExit("ka9q bands need the multicast group: "
                              "ka9q@GROUP:center/span")
-        return create_source("ka9q", group=host, port=args.rtp_port)
+        return create_source("ka9q", group=host, port=args.rtp_port,
+                             iface=args.rtp_iface, encoding=args.rtp_encoding)
     if source_name in ("sdrplay", "soapy", "miri", "rtlsdr", "airspy"):
         # host field carries the device selector (serial or key=val args)
         return create_source(source_name, device_args=host or "",

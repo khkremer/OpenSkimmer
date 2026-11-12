@@ -191,6 +191,13 @@ file explain the channel layout and the traps. One trap to know up front:
 the systemd unit name must not include `.conf`. Use
 `radiod@skimmer-rx888`, not `radiod@skimmer-rx888.conf`.
 
+Two options must match how `radiod` is set up. A channel with
+`encoding = f32` needs `--rtp-encoding f32le` (the default reads radiod's
+16-bit format; read with the wrong one, the IQ is noise and nothing is
+spotted). With `radiod` on the same host and `ttl = 0`, which keeps its
+multicast off the LAN, it sends only on the loopback interface, so join
+there with `--rtp-iface 127.0.0.1`.
+
 Multicast IQ at these rates often loses packets with default Linux network
 settings. If the skimmer logs `RTP packet(s) lost`, these can help:
 
